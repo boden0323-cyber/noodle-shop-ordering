@@ -1,0 +1,36 @@
+<meta charset="UTF-8">
+<title>員工後台</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="style.css">
+
+<header>
+  <h1>員工後台</h1>
+  <button id="logoutBtn" style="display:none;background:none;border:1px solid #fff;color:#fff;border-radius:6px;padding:4px 10px;">登出</button>
+</header>
+
+<main>
+  <div id="loginArea" class="login-box">
+    <h3>請輸入密碼</h3>
+    <input id="pwInput" type="password" placeholder="密碼">
+    <button id="loginBtn">登入</button>
+    <p id="loginErr" style="color:#c0392b;"></p>
+  </div>
+
+  <div id="staffArea" style="display:none;">
+    <div class="summary-bar">
+      <div>今日訂單：<b id="sumCount">0</b></div>
+      <div>已收款：<b id="sumPaid">0</b> 元</div>
+      <div>未收款：<b id="sumUnpaid">0</b> 元</div>
+    </div>
+
+    <div class="tabs">
+      <button data-tab="orders" class="active">訂單</button>
+      <button data-tab="products">商品管理</button>
+    </div>
+
+    <div id="ordersTab"></div>
+    <div id="productsTab" style="display:none;"></div>
+  </div>
+</main>
+
+<script src="staff.js"></script>

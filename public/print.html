@@ -1,0 +1,44 @@
+<meta charset="UTF-8">
+<title>廚房單列印</title>
+<style>
+  body { font-family: "Microsoft JhengHei", sans-serif; width: 78mm; margin: 0 auto; padding: 8px; font-size: 14px; }
+  h2 { text-align: center; margin: 4px 0; font-size: 20px; }
+  .line { border-top: 1px dashed #000; margin: 8px 0; }
+  .row { display: flex; justify-content: space-between; }
+  .items div { margin: 4px 0; font-size: 15px; }
+  .note { color: #333; font-size: 13px; }
+  #printBtn { display: block; width: 100%; margin: 10px 0; padding: 10px; font-size: 15px; }
+  @media print { #printBtn { display: none; } }
+</style>
+
+<button id="printBtn" onclick="window.print()">列印</button>
+<div id="ticket">載入中...</div>
+
+<script>
+const id = new URLSearchParams(location.search).get('order');
+
+async function load() {
+  const res = await fetch(`/api/staff/orders/${id}`);
+  if (!res.ok) {
+    document.getElementById('ticket').textContent = '找不到訂單，或尚未登入員工後台';
+    return;
+  }
+  const o = await res.json();
+  const src = o.type === 'dine_in' ? `內用・${o.table_no}桌` : `預購取貨・${o.pickup_name}${o.pickup_phone ? '（' + o.pickup_phone + '）' : ''}`;
+  document.getElementById('ticket').innerHTML = `
+    <h2>${o.order_no}</h2>
+    <div class="row"><span>${src}</span><span>${o.created_at}</span></div>
+    ${o.pickup_time ? `<div>希望取貨：${o.pickup_time}</div>` : ''}
+    <div class="line"></div>
+    <div class="items">
+      ${o.items.map(it => `<div class="row"><span>${it.product_name} x${it.qty}</span><span>${it.price * it.qty}</span></div>${it.note ? `<div class="note">－${it.note}</div>` : ''}`).join('')}
+    </div>
+    <div class="line"></div>
+    <div class="row"><b>合計</b><b>${o.total} 元</b></div>
+    ${o.note ? `<div class="note">備註：${o.note}</div>` : ''}
+  `;
+  document.title = `廚房單 ${o.order_no}`;
+  setTimeout(() => window.print(), 300); // 自動彈出列印視窗，仍保留手動按鈕備用
+}
+load();
+</script>

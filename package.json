@@ -1,0 +1,15 @@
+{
+  "name": "noodle-shop-ordering",
+  "version": "1.0.0",
+  "description": "麵店線上點餐＋接單＋結帳系統",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.17.4",
+    "cookie-parser": "^1.4.6",
+    "express": "^4.19.2"
+  }
+}

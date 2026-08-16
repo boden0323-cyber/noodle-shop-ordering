@@ -1,0 +1,90 @@
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+  margin: 0;
+  background: #f5f3ef;
+  color: #2b2118;
+}
+header {
+  background: #7a2e1d;
+  color: #fff;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+header h1 { font-size: 18px; margin: 0; }
+main { max-width: 720px; margin: 0 auto; padding: 12px; }
+
+.category-title {
+  font-size: 15px;
+  font-weight: bold;
+  margin: 18px 0 8px;
+  color: #7a2e1d;
+}
+.product-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.product-name { font-size: 15px; font-weight: 600; }
+.product-price { color: #b34700; font-size: 14px; margin-top: 2px; }
+.qty-control { display: flex; align-items: center; gap: 8px; }
+.qty-control button {
+  width: 30px; height: 30px; border-radius: 50%; border: none;
+  background: #7a2e1d; color: #fff; font-size: 16px; cursor: pointer;
+}
+.qty-control span { min-width: 20px; text-align: center; }
+
+.cart-bar {
+  position: sticky; bottom: 0; background: #fff;
+  border-top: 1px solid #ddd; padding: 12px 16px;
+  display: flex; justify-content: space-between; align-items: center;
+  box-shadow: 0 -2px 6px rgba(0,0,0,0.08);
+}
+.cart-bar button {
+  background: #b34700; color: #fff; border: none; border-radius: 8px;
+  padding: 10px 18px; font-size: 15px; cursor: pointer;
+}
+.cart-bar button:disabled { background: #ccc; }
+
+form.info-form { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+form.info-form label { display: block; margin-bottom: 10px; font-size: 14px; }
+form.info-form input, form.info-form select {
+  width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 6px;
+  font-size: 14px;
+}
+
+/* ---- 員工後台 ---- */
+.order-card {
+  background: #fff; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.order-card.status-received { border-left: 5px solid #d9822b; }
+.order-card.status-preparing { border-left: 5px solid #2b7fd9; }
+.order-card.status-done { border-left: 5px solid #2ba25d; opacity: 0.7; }
+.order-head { display: flex; justify-content: space-between; font-weight: bold; }
+.order-meta { font-size: 13px; color: #666; margin: 4px 0 8px; }
+.order-items { font-size: 14px; margin-bottom: 8px; }
+.order-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.order-actions button {
+  border: none; border-radius: 6px; padding: 7px 12px; font-size: 13px; cursor: pointer;
+  background: #eee;
+}
+.order-actions button.primary { background: #7a2e1d; color: #fff; }
+.paid-tag { color: #2ba25d; font-weight: bold; font-size: 13px; }
+.unpaid-tag { color: #c0392b; font-weight: bold; font-size: 13px; }
+
+.login-box { max-width: 320px; margin: 60px auto; background: #fff; padding: 20px; border-radius: 10px; }
+.login-box input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 6px; }
+.login-box button { width: 100%; padding: 10px; background: #7a2e1d; color: #fff; border: none; border-radius: 6px; }
+
+.summary-bar { background: #fff; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; display: flex; gap: 18px; font-size: 14px; }
+.tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+.tabs button { flex: 1; padding: 8px; border: none; border-radius: 8px; background: #eee; cursor: pointer; }
+.tabs button.active { background: #7a2e1d; color: #fff; }
