@@ -46,6 +46,11 @@ async function init() {
       qty INTEGER NOT NULL,
       note TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    );
   `);
 
   const { rows } = await client.execute('SELECT COUNT(*) AS c FROM products');
@@ -64,4 +69,16 @@ async function init() {
   }
 }
 
-module.exports = { client, init };
+async function getSetting(key) {
+  const { rows } = await client.execute({ sql: 'SELECT value FROM settings WHERE key = ?', args: [key] });
+  return rows[0]?.value ?? null;
+}
+
+async function setSetting(key, value) {
+  await client.execute({
+    sql: 'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+    args: [key, value],
+  });
+}
+
+module.exports = { client, init, getSetting, setSetting };

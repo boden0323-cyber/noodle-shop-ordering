@@ -1,10 +1,42 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const crypto = require('crypto');
-const { client, init } = require('./db');
+const { client, init, getSetting, setSetting } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// ---------- Instagram 長效期權杖：一次授權，之後自動續期 ----------
+const IG_APP_ID = process.env.IG_APP_ID;
+const IG_APP_SECRET = process.env.IG_APP_SECRET;
+const IG_REDIRECT_URI = process.env.IG_REDIRECT_URI || 'https://noodle-shop-ordering.onrender.com/ig-callback';
+
+async function refreshIgTokenIfNeeded() {
+  if (!IG_APP_SECRET) return;
+  const token = await getSetting('ig_access_token');
+  const expiresAt = await getSetting('ig_token_expires_at');
+  if (!token) return;
+
+  const daysLeft = expiresAt ? (Number(expiresAt) - Date.now()) / (1000 * 60 * 60 * 24) : -1;
+  if (daysLeft > 10) return; // 還很久才過期，不用急著換
+
+  try {
+    const res = await fetch(
+      `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${token}`
+    );
+    const data = await res.json();
+    if (data.access_token) {
+      const newExpiresAt = Date.now() + data.expires_in * 1000;
+      await setSetting('ig_access_token', data.access_token);
+      await setSetting('ig_token_expires_at', String(newExpiresAt));
+      console.log('Instagram權杖已自動續期，新到期時間：', new Date(newExpiresAt).toLocaleString());
+    } else {
+      console.error('Instagram權杖續期失敗：', data);
+    }
+  } catch (err) {
+    console.error('Instagram權杖續期發生錯誤：', err);
+  }
+}
 
 // 員工後台密碼：正式使用前務必修改（用環境變數 STAFF_PASSWORD 覆蓋），預設僅供本機測試
 const STAFF_PASSWORD = process.env.STAFF_PASSWORD || 'admin123';
@@ -48,6 +80,66 @@ app.get('/api/staff/check', (req, res) => {
   const token = req.cookies.staff_token;
   res.json({ loggedIn: !!(token && staffTokens.has(token)) });
 });
+
+// ---------- Instagram OAuth 授權回呼：訪問一次授權連結後，這裡自動完成長效期權杖交換 ----------
+app.get('/ig-callback', h(async (req, res) => {
+  const { code, error, error_description } = req.query;
+  if (error) {
+    return res.status(400).send(`授權失敗：${error_description || error}`);
+  }
+  if (!code) {
+    return res.status(400).send('缺少授權碼');
+  }
+  if (!IG_APP_ID || !IG_APP_SECRET) {
+    return res.status(500).send('伺服器尚未設定 IG_APP_ID / IG_APP_SECRET 環境變數');
+  }
+
+  // 1. 用授權碼換短效期權杖
+  const form = new URLSearchParams({
+    client_id: IG_APP_ID,
+    client_secret: IG_APP_SECRET,
+    grant_type: 'authorization_code',
+    redirect_uri: IG_REDIRECT_URI,
+    code: String(code).replace(/#_$/, ''), // Instagram有時會在code結尾多加 #_
+  });
+  const shortRes = await fetch('https://api.instagram.com/oauth/access_token', { method: 'POST', body: form });
+  const shortData = await shortRes.json();
+  if (!shortData.access_token) {
+    return res.status(400).send('<pre>短效期權杖交換失敗：\n' + JSON.stringify(shortData, null, 2) + '</pre>');
+  }
+
+  // 2. 換成長效期權杖（60天，之後可用 refresh 續期，不需要再重新授權）
+  const longRes = await fetch(
+    `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${IG_APP_SECRET}&access_token=${shortData.access_token}`
+  );
+  const longData = await longRes.json();
+  if (!longData.access_token) {
+    return res.status(400).send('<pre>長效期權杖交換失敗：\n' + JSON.stringify(longData, null, 2) + '</pre>');
+  }
+
+  const expiresAt = Date.now() + longData.expires_in * 1000;
+  await setSetting('ig_access_token', longData.access_token);
+  await setSetting('ig_token_expires_at', String(expiresAt));
+  await setSetting('ig_user_id', String(shortData.user_id));
+
+  res.send(`
+    <h2>Instagram 授權成功 ✅</h2>
+    <p>長效期權杖已存好，到期時間：${new Date(expiresAt).toLocaleString('zh-TW')}</p>
+    <p>之後系統會在到期前自動續期，不用再重新走這個流程，這頁可以關掉了。</p>
+  `);
+}));
+
+app.get('/api/staff/ig-status', requireStaff, h(async (req, res) => {
+  const token = await getSetting('ig_access_token');
+  const expiresAt = await getSetting('ig_token_expires_at');
+  const userId = await getSetting('ig_user_id');
+  res.json({
+    connected: !!token,
+    user_id: userId,
+    expires_at: expiresAt ? new Date(Number(expiresAt)).toISOString() : null,
+    days_left: expiresAt ? Math.floor((Number(expiresAt) - Date.now()) / (1000 * 60 * 60 * 24)) : null,
+  });
+}));
 
 // ---------- 商品：客人可看「上架中」商品 ----------
 app.get('/api/products', h(async (req, res) => {
@@ -210,7 +302,10 @@ app.get('/api/staff/summary/today', requireStaff, h(async (req, res) => {
 }));
 
 init()
-  .then(() => {
+  .then(async () => {
+    await refreshIgTokenIfNeeded(); // 啟動時先檢查一次，快到期就順便換新
+    setInterval(refreshIgTokenIfNeeded, 12 * 60 * 60 * 1000); // 之後每12小時檢查一次
+
     app.listen(PORT, () => {
       console.log(`麵店點餐系統啟動：http://localhost:${PORT}`);
       console.log(`客人點餐頁：http://localhost:${PORT}/order.html`);
