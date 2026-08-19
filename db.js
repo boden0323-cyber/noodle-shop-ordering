@@ -51,6 +51,19 @@ async function init() {
       key TEXT PRIMARY KEY,
       value TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS scheduled_posts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      platform TEXT NOT NULL DEFAULT 'instagram',
+      video_path TEXT NOT NULL,
+      caption TEXT NOT NULL,
+      scheduled_at TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      posted_media_id TEXT,
+      posted_permalink TEXT,
+      error TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+    );
   `);
 
   const { rows } = await client.execute('SELECT COUNT(*) AS c FROM products');

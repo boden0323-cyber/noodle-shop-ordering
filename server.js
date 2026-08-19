@@ -129,6 +129,78 @@ app.get('/ig-callback', h(async (req, res) => {
   `);
 }));
 
+// ---------- 排程發文：定期檢查到期的貼文並自動發布到Instagram ----------
+async function publishToInstagram(post) {
+  const token = await getSetting('ig_access_token');
+  const igUserId = await getSetting('ig_user_id');
+  if (!token || !igUserId) throw new Error('Instagram尚未授權，找不到權杖');
+
+  const videoUrl = `https://noodle-shop-ordering.onrender.com/ig-videos/${post.video_path}`;
+
+  const createRes = await fetch(`https://graph.instagram.com/${igUserId}/media`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: Buffer.from(JSON.stringify({
+      video_url: videoUrl,
+      media_type: 'REELS',
+      caption: post.caption,
+      access_token: token,
+    }), 'utf8'),
+  });
+  const createData = await createRes.json();
+  if (!createData.id) throw new Error('建立容器失敗：' + JSON.stringify(createData));
+
+  // 輪詢處理狀態，最多等5分鐘
+  let statusCode = 'IN_PROGRESS';
+  for (let i = 0; i < 30 && statusCode === 'IN_PROGRESS'; i++) {
+    await new Promise((r) => setTimeout(r, 10000));
+    const statusRes = await fetch(`https://graph.instagram.com/${createData.id}?fields=status_code&access_token=${token}`);
+    const statusData = await statusRes.json();
+    statusCode = statusData.status_code;
+  }
+  if (statusCode !== 'FINISHED') throw new Error('影片處理未完成，狀態：' + statusCode);
+
+  const publishRes = await fetch(`https://graph.instagram.com/${igUserId}/media_publish`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: Buffer.from(JSON.stringify({ creation_id: createData.id, access_token: token }), 'utf8'),
+  });
+  const publishData = await publishRes.json();
+  if (!publishData.id) throw new Error('發布失敗：' + JSON.stringify(publishData));
+
+  const detailRes = await fetch(`https://graph.instagram.com/${publishData.id}?fields=permalink&access_token=${token}`);
+  const detailData = await detailRes.json();
+
+  return { mediaId: publishData.id, permalink: detailData.permalink };
+}
+
+async function publishDuePosts() {
+  const { rows } = await client.execute(
+    "SELECT * FROM scheduled_posts WHERE status = 'pending' AND scheduled_at <= datetime('now','localtime')"
+  );
+  for (const post of rows) {
+    try {
+      const result = await publishToInstagram(post);
+      await client.execute({
+        sql: "UPDATE scheduled_posts SET status = 'posted', posted_media_id = ?, posted_permalink = ? WHERE id = ?",
+        args: [result.mediaId, result.permalink, post.id],
+      });
+      console.log(`排程貼文 #${post.id} 發布成功：${result.permalink}`);
+    } catch (err) {
+      await client.execute({
+        sql: "UPDATE scheduled_posts SET status = 'failed', error = ? WHERE id = ?",
+        args: [String(err.message || err), post.id],
+      });
+      console.error(`排程貼文 #${post.id} 發布失敗：`, err);
+    }
+  }
+}
+
+app.get('/api/staff/scheduled-posts', requireStaff, h(async (req, res) => {
+  const { rows } = await client.execute('SELECT * FROM scheduled_posts ORDER BY scheduled_at');
+  res.json(rows);
+}));
+
 app.get('/api/staff/ig-status', requireStaff, h(async (req, res) => {
   const token = await getSetting('ig_access_token');
   const expiresAt = await getSetting('ig_token_expires_at');
@@ -305,6 +377,9 @@ init()
   .then(async () => {
     await refreshIgTokenIfNeeded(); // 啟動時先檢查一次，快到期就順便換新
     setInterval(refreshIgTokenIfNeeded, 12 * 60 * 60 * 1000); // 之後每12小時檢查一次
+
+    await publishDuePosts(); // 啟動時先檢查一次有沒有該發的排程貼文
+    setInterval(publishDuePosts, 60 * 60 * 1000); // 之後每小時檢查一次
 
     app.listen(PORT, () => {
       console.log(`麵店點餐系統啟動：http://localhost:${PORT}`);
