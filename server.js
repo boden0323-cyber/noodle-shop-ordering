@@ -135,7 +135,7 @@ async function publishToInstagram(post) {
   const igUserId = await getSetting('ig_user_id');
   if (!token || !igUserId) throw new Error('Instagram尚未授權，找不到權杖');
 
-  const videoUrl = `https://noodle-shop-ordering.onrender.com/ig-videos/${post.video_path}`;
+  const videoUrl = `https://noodle-shop-ordering.onrender.com/ig-videos/${encodeURIComponent(post.video_path)}`;
 
   const createRes = await fetch(`https://graph.instagram.com/${igUserId}/media`, {
     method: 'POST',
