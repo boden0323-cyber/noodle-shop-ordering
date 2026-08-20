@@ -32,7 +32,14 @@ function renderCategoryNav() {
     .join('');
   nav.querySelectorAll('button').forEach((btn) => {
     btn.onclick = () => {
-      document.getElementById(`section-${btn.dataset.cat}`).scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const target = document.getElementById(`section-${btn.dataset.cat}`);
+      const top = target.getBoundingClientRect().top + window.scrollY - 54; // 54px留給sticky分類導覽的高度
+      window.scrollTo({ top, behavior: 'smooth' });
+      // 保險：如果瀏覽器不支援/不執行smooth捲動，300ms後檢查有沒有真的移動，沒有就直接跳轉
+      const startY = window.scrollY;
+      setTimeout(() => {
+        if (Math.abs(window.scrollY - startY) < 10) window.scrollTo({ top });
+      }, 300);
     };
   });
 }
