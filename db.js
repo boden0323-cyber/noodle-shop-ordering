@@ -57,7 +57,8 @@ async function init() {
       platform TEXT NOT NULL DEFAULT 'instagram',
       video_path TEXT NOT NULL,
       caption TEXT NOT NULL,
-      scheduled_at TEXT NOT NULL,
+      scheduled_at TEXT NOT NULL,  -- 注意：一律存UTC時間！資料庫的datetime('now','localtime')在這個環境等同UTC，
+                                    -- 不會自動轉台灣時間。要排「台灣時間18:00」，這欄要存「10:00:00」（減8小時）。
       status TEXT NOT NULL DEFAULT 'pending',
       posted_media_id TEXT,
       posted_permalink TEXT,
