@@ -1,18 +1,22 @@
 <meta charset="UTF-8">
-<title>線上點餐</title>
+<title>713厝 線上點餐</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="order.css">
 
-<header>
-  <h1 id="pageTitle">點餐</h1>
-</header>
+<div class="hero">
+  <p class="wordmark">713厝</p>
+  <p class="tagline">高雄鼓山老麵店 · 手工鍋燒滷味</p>
+  <div id="modeBadge" class="mode-badge"></div>
+</div>
+
+<nav class="category-nav" id="categoryNav"></nav>
 
 <main>
   <div id="menu"></div>
 </main>
 
 <div class="cart-bar">
-  <div>共 <span id="cartCount">0</span> 項 ／ <span id="cartTotal">0</span> 元</div>
+  <div class="summary">共 <b id="cartCount">0</b> 項　<b id="cartTotal">0</b> 元</div>
   <button id="submitBtn" disabled>送出訂單</button>
 </div>
 

@@ -1,0 +1,157 @@
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", sans-serif;
+  background: #f7f1e8;
+  color: #2b2118;
+}
+
+/* ---------- 頂部品牌區 ---------- */
+.hero {
+  background: linear-gradient(135deg, #7a2e1d 0%, #5c2115 100%);
+  color: #fff;
+  padding: 22px 20px 20px;
+  text-align: center;
+  position: relative;
+}
+.hero .wordmark {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  margin: 0;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+.hero .tagline {
+  font-size: 13px;
+  opacity: 0.85;
+  margin: 6px 0 0;
+  letter-spacing: 1px;
+}
+.hero .mode-badge {
+  display: inline-block;
+  margin-top: 10px;
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.35);
+  border-radius: 999px;
+  padding: 4px 14px;
+  font-size: 12.5px;
+}
+
+/* ---------- 分類快速導覽 ---------- */
+.category-nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #f7f1e8;
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  overflow-x: auto;
+  border-bottom: 1px solid #e8ddc9;
+  scrollbar-width: none;
+}
+.category-nav::-webkit-scrollbar { display: none; }
+.category-nav button {
+  flex: 0 0 auto;
+  border: 1px solid #d8c8ab;
+  background: #fff;
+  color: #7a2e1d;
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.category-nav button.active {
+  background: #7a2e1d;
+  color: #fff;
+  border-color: #7a2e1d;
+}
+
+main { max-width: 720px; margin: 0 auto; padding: 4px 14px 100px; }
+
+.category-section { scroll-margin-top: 60px; }
+.category-title {
+  font-size: 16px;
+  font-weight: 800;
+  margin: 22px 2px 10px;
+  color: #7a2e1d;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.category-title .icon { font-size: 18px; }
+
+.product-card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 13px 15px;
+  margin-bottom: 9px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 1px 4px rgba(122,46,29,0.08);
+  border: 1px solid #f0e6d6;
+  transition: box-shadow 0.15s;
+}
+.product-card.in-cart { border-color: #d8a04c; box-shadow: 0 2px 8px rgba(122,46,29,0.12); }
+.product-name { font-size: 15px; font-weight: 700; line-height: 1.3; }
+.product-price { color: #b3722e; font-size: 14px; margin-top: 3px; font-weight: 600; }
+
+.qty-control { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.qty-control button {
+  width: 30px; height: 30px; border-radius: 50%; border: none;
+  background: #f7ede0; color: #7a2e1d; font-size: 17px; font-weight: 700;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: transform 0.1s;
+}
+.qty-control button:active { transform: scale(0.9); }
+.qty-control button.inc { background: #7a2e1d; color: #fff; }
+.qty-control span { min-width: 18px; text-align: center; font-weight: 700; font-size: 15px; }
+
+/* ---------- 購物車列 ---------- */
+.cart-bar {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  background: #fff;
+  border-top: 1px solid #e8ddc9;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  display: flex; justify-content: space-between; align-items: center;
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.08);
+  max-width: 720px; margin: 0 auto;
+}
+.cart-bar .summary { font-size: 14px; }
+.cart-bar .summary b { color: #7a2e1d; font-size: 17px; }
+.cart-bar button {
+  background: #7a2e1d; color: #fff; border: none; border-radius: 999px;
+  padding: 12px 26px; font-size: 15px; font-weight: 700; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(122,46,29,0.35);
+}
+.cart-bar button:disabled { background: #d8cbb5; box-shadow: none; }
+
+/* ---------- 表單 & 確認頁 ---------- */
+form.info-form, .confirm-box {
+  background: #fff; border-radius: 16px; padding: 20px;
+  margin: 16px 2px; box-shadow: 0 1px 4px rgba(122,46,29,0.08);
+}
+form.info-form h3 { margin-top: 0; color: #7a2e1d; }
+form.info-form label { display: block; margin-bottom: 12px; font-size: 14px; font-weight: 600; }
+form.info-form input {
+  width: 100%; padding: 10px 12px; margin-top: 5px; border: 1px solid #ddd2bd;
+  border-radius: 10px; font-size: 15px; background: #fdfbf6;
+}
+form.info-form input:focus { outline: 2px solid #7a2e1d; outline-offset: 1px; }
+form.info-form button[type="submit"] {
+  width: 100%; padding: 13px; background: #7a2e1d; color: #fff; border: none;
+  border-radius: 999px; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 6px;
+}
+
+.confirm-box { text-align: center; padding: 36px 20px; }
+.confirm-box .check { font-size: 46px; }
+.confirm-box h2 { color: #7a2e1d; margin: 6px 0; }
+.confirm-box .order-no { font-size: 26px; font-weight: 800; margin: 10px 0; }
+.confirm-box .amount { font-size: 16px; color: #555; }
+
+.empty-hint { text-align: center; color: #998; padding: 40px 0; font-size: 14px; }
