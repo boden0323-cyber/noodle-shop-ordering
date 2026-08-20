@@ -4,7 +4,7 @@ const mode = tableNo ? 'dine_in' : 'pickup';
 
 document.getElementById('modeBadge').textContent = tableNo ? `內用點餐・${tableNo}桌` : '線上預購取貨';
 
-const CATEGORY_ICON = { 麵食: '🍜', 湯品: '🥣', 滷味: '🍢' };
+const CATEGORY_ICON = { 麵食: '🍲', 湯品: '🥣', 滷味: '🍖' };
 
 let products = [];
 const cart = new Map(); // product_id -> { product, qty }
