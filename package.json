@@ -10,6 +10,7 @@
   "dependencies": {
     "@libsql/client": "^0.17.4",
     "cookie-parser": "^1.4.6",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "googleapis": "^176.0.0"
   }
 }

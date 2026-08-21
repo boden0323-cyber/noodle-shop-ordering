@@ -1,10 +1,30 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const { google } = require('googleapis');
 const { client, init, getSetting, setSetting } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// ---------- YouTube：Google的refresh token不會過期，設定一次即可長期使用 ----------
+const YT_CLIENT_ID = process.env.YT_CLIENT_ID;
+const YT_CLIENT_SECRET = process.env.YT_CLIENT_SECRET;
+const YT_REDIRECT_URI = process.env.YT_REDIRECT_URI || 'https://noodle-shop-ordering.onrender.com/youtube-callback';
+
+function getYoutubeOAuthClient() {
+  return new google.auth.OAuth2(YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REDIRECT_URI);
+}
+
+async function getYoutubeClient() {
+  const refreshToken = await getSetting('yt_refresh_token');
+  if (!refreshToken) throw new Error('YouTube尚未授權');
+  const oauth2Client = getYoutubeOAuthClient();
+  oauth2Client.setCredentials({ refresh_token: refreshToken });
+  return google.youtube({ version: 'v3', auth: oauth2Client });
+}
 
 // ---------- Instagram 長效期權杖：一次授權，之後自動續期 ----------
 const IG_APP_ID = process.env.IG_APP_ID;
@@ -135,7 +155,45 @@ app.get('/ig-callback', h(async (req, res) => {
   `);
 }));
 
-// ---------- 排程發文：定期檢查到期的貼文並自動發布到Instagram ----------
+// ---------- YouTube OAuth 授權回呼 ----------
+app.get('/youtube-callback', h(async (req, res) => {
+  const { code, error } = req.query;
+  if (error) return res.status(400).send(`授權失敗：${error}`);
+  if (!code) return res.status(400).send('缺少授權碼');
+  if (!YT_CLIENT_ID || !YT_CLIENT_SECRET) {
+    return res.status(500).send('伺服器尚未設定 YT_CLIENT_ID / YT_CLIENT_SECRET 環境變數');
+  }
+
+  const oauth2Client = getYoutubeOAuthClient();
+  const { tokens } = await oauth2Client.getToken(code);
+
+  if (!tokens.refresh_token) {
+    return res.status(400).send(`
+      <h2>缺少refresh_token ⚠️</h2>
+      <p>Google只有在你第一次同意授權時才會給refresh_token。如果你之前已經同意過這個App的權限，
+      需要先到 <a href="https://myaccount.google.com/permissions" target="_blank">Google帳號權限管理</a>
+      把這個App的存取權限移除，再重新走一次授權連結。</p>
+    `);
+  }
+
+  await setSetting('yt_refresh_token', tokens.refresh_token);
+  await setSetting('yt_access_token', tokens.access_token);
+  await setSetting('yt_token_expires_at', String(tokens.expiry_date));
+
+  oauth2Client.setCredentials(tokens);
+  const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+  const channelRes = await youtube.channels.list({ part: 'snippet', mine: true });
+  const channel = channelRes.data.items?.[0];
+  if (channel) await setSetting('yt_channel_title', channel.snippet.title);
+
+  res.send(`
+    <h2>YouTube 授權成功 ✅</h2>
+    <p>頻道：${channel ? channel.snippet.title : '（讀取中）'}</p>
+    <p>Google的授權長期有效，不太需要重新授權，這頁可以關掉了。</p>
+  `);
+}));
+
+// ---------- 排程發文：定期檢查到期的貼文並自動發布到Instagram/YouTube ----------
 async function publishToInstagram(post) {
   const token = await getSetting('ig_access_token');
   const igUserId = await getSetting('ig_user_id');
@@ -180,13 +238,58 @@ async function publishToInstagram(post) {
   return { mediaId: publishData.id, permalink: detailData.permalink };
 }
 
+async function publishToYoutube(post) {
+  const youtube = await getYoutubeClient();
+  const videoPath = path.join(__dirname, 'public', 'ig-videos', post.video_path);
+  if (!fs.existsSync(videoPath)) throw new Error('找不到影片檔案：' + post.video_path);
+
+  const firstLine = post.caption.split('\n')[0].slice(0, 95);
+  const tags = [...post.caption.matchAll(/#(\S+)/g)].map((m) => m[1]);
+
+  const res = await youtube.videos.insert({
+    part: 'snippet,status',
+    requestBody: {
+      snippet: {
+        title: firstLine || '713厝',
+        description: post.caption,
+        tags,
+        categoryId: '26', // Howto & Style
+      },
+      status: { privacyStatus: 'public', selfDeclaredMadeForKids: false },
+    },
+    media: { body: fs.createReadStream(videoPath) },
+  });
+
+  return { mediaId: res.data.id, permalink: `https://youtube.com/shorts/${res.data.id}` };
+}
+
+async function refreshYoutubeTokenIfNeeded() {
+  if (!YT_CLIENT_SECRET) return;
+  const refreshToken = await getSetting('yt_refresh_token');
+  if (!refreshToken) return;
+  const expiresAt = await getSetting('yt_token_expires_at');
+  const minutesLeft = expiresAt ? (Number(expiresAt) - Date.now()) / (1000 * 60) : -1;
+  if (minutesLeft > 10) return; // access token還有效，Google的refresh_token本身不會過期
+
+  try {
+    const oauth2Client = getYoutubeOAuthClient();
+    oauth2Client.setCredentials({ refresh_token: refreshToken });
+    const { credentials } = await oauth2Client.refreshAccessToken();
+    await setSetting('yt_access_token', credentials.access_token);
+    await setSetting('yt_token_expires_at', String(credentials.expiry_date));
+  } catch (err) {
+    console.error('YouTube access token 續期失敗：', err);
+  }
+}
+
 async function publishDuePosts() {
   const { rows } = await client.execute(
     "SELECT * FROM scheduled_posts WHERE status = 'pending' AND scheduled_at <= datetime('now','localtime')"
   );
   for (const post of rows) {
     try {
-      const result = await publishToInstagram(post);
+      const publisher = post.platform === 'youtube' ? publishToYoutube : publishToInstagram;
+      const result = await publisher(post);
       await client.execute({
         sql: "UPDATE scheduled_posts SET status = 'posted', posted_media_id = ?, posted_permalink = ? WHERE id = ?",
         args: [result.mediaId, result.permalink, post.id],
@@ -217,6 +320,12 @@ app.get('/api/staff/ig-status', requireStaff, h(async (req, res) => {
     expires_at: expiresAt ? new Date(Number(expiresAt)).toISOString() : null,
     days_left: expiresAt ? Math.floor((Number(expiresAt) - Date.now()) / (1000 * 60 * 60 * 24)) : null,
   });
+}));
+
+app.get('/api/staff/youtube-status', requireStaff, h(async (req, res) => {
+  const refreshToken = await getSetting('yt_refresh_token');
+  const channelTitle = await getSetting('yt_channel_title');
+  res.json({ connected: !!refreshToken, channel_title: channelTitle });
 }));
 
 // ---------- 商品：客人可看「上架中」商品 ----------
@@ -404,6 +513,9 @@ init()
   .then(async () => {
     await refreshIgTokenIfNeeded(); // 啟動時先檢查一次，快到期就順便換新
     setInterval(refreshIgTokenIfNeeded, 12 * 60 * 60 * 1000); // 之後每12小時檢查一次
+
+    await refreshYoutubeTokenIfNeeded();
+    setInterval(refreshYoutubeTokenIfNeeded, 45 * 60 * 1000); // YouTube access token只有1小時效期，45分鐘檢查一次
 
     await publishDuePosts(); // 啟動時先檢查一次有沒有該發的排程貼文
     setInterval(publishDuePosts, 60 * 60 * 1000); // 之後每小時檢查一次
