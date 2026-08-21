@@ -19,6 +19,7 @@ if (/\bLine\//i.test(navigator.userAgent)) {
 }
 
 const CATEGORY_ICON = { 麵食: '🍲', 湯品: '🥣', 滷味: '🍖' };
+const CATEGORY_ORDER = ['麵食', '滷味', '湯品']; // 顯示順序：先麵，再滷味，再湯
 
 let products = [];
 const cart = new Map(); // product_id -> { product, qty }
@@ -35,7 +36,14 @@ function groupByCategory() {
   for (const p of products) {
     (byCategory[p.category] = byCategory[p.category] || []).push(p);
   }
-  return byCategory;
+  // 依照 CATEGORY_ORDER 排序，沒列進去的分類排在最後面
+  const sorted = {};
+  const keys = Object.keys(byCategory).sort((a, b) => {
+    const ia = CATEGORY_ORDER.indexOf(a), ib = CATEGORY_ORDER.indexOf(b);
+    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+  });
+  for (const k of keys) sorted[k] = byCategory[k];
+  return sorted;
 }
 
 function renderCategoryNav() {
