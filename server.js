@@ -117,10 +117,16 @@ app.get('/ig-callback', h(async (req, res) => {
     return res.status(400).send('<pre>長效期權杖交換失敗：\n' + JSON.stringify(longData, null, 2) + '</pre>');
   }
 
+  // 3. 不要相信授權流程回傳的 user_id（跟實際可用來發文的ID曾經對不上），
+  //    改用權杖實際呼叫/me查到的id為準，這才是能拿來發文的正確ID
+  const meRes = await fetch(`https://graph.instagram.com/me?fields=id&access_token=${longData.access_token}`);
+  const meData = await meRes.json();
+  const correctUserId = meData.id || shortData.user_id;
+
   const expiresAt = Date.now() + longData.expires_in * 1000;
   await setSetting('ig_access_token', longData.access_token);
   await setSetting('ig_token_expires_at', String(expiresAt));
-  await setSetting('ig_user_id', String(shortData.user_id));
+  await setSetting('ig_user_id', String(correctUserId));
 
   res.send(`
     <h2>Instagram 授權成功 ✅</h2>
