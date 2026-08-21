@@ -26,6 +26,11 @@ async function getYoutubeClient() {
   return google.youtube({ version: 'v3', auth: oauth2Client });
 }
 
+// ---------- Facebook 粉專：用粉專權杖發文，一般不會過期（除非使用者撤銷授權） ----------
+const FB_APP_ID = process.env.FB_APP_ID;
+const FB_APP_SECRET = process.env.FB_APP_SECRET;
+const FB_REDIRECT_URI = process.env.FB_REDIRECT_URI || 'https://noodle-shop-ordering.onrender.com/facebook-callback';
+
 // ---------- Instagram 長效期權杖：一次授權，之後自動續期 ----------
 const IG_APP_ID = process.env.IG_APP_ID;
 const IG_APP_SECRET = process.env.IG_APP_SECRET;
@@ -193,6 +198,52 @@ app.get('/youtube-callback', h(async (req, res) => {
   `);
 }));
 
+// ---------- Facebook OAuth 授權回呼 ----------
+app.get('/facebook-callback', h(async (req, res) => {
+  const { code, error } = req.query;
+  if (error) return res.status(400).send(`授權失敗：${error}`);
+  if (!code) return res.status(400).send('缺少授權碼');
+  if (!FB_APP_ID || !FB_APP_SECRET) {
+    return res.status(500).send('伺服器尚未設定 FB_APP_ID / FB_APP_SECRET 環境變數');
+  }
+
+  // 1. 授權碼換短效期使用者權杖
+  const shortRes = await fetch(
+    `https://graph.facebook.com/v21.0/oauth/access_token?client_id=${FB_APP_ID}&client_secret=${FB_APP_SECRET}&redirect_uri=${encodeURIComponent(FB_REDIRECT_URI)}&code=${code}`
+  );
+  const shortData = await shortRes.json();
+  if (!shortData.access_token) {
+    return res.status(400).send('<pre>權杖交換失敗：\n' + JSON.stringify(shortData, null, 2) + '</pre>');
+  }
+
+  // 2. 換成長效期使用者權杖（約60天，但用來換粉專權杖後，粉專權杖本身不太會過期）
+  const longRes = await fetch(
+    `https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${FB_APP_ID}&client_secret=${FB_APP_SECRET}&fb_exchange_token=${shortData.access_token}`
+  );
+  const longData = await longRes.json();
+  if (!longData.access_token) {
+    return res.status(400).send('<pre>長效期權杖交換失敗：\n' + JSON.stringify(longData, null, 2) + '</pre>');
+  }
+
+  // 3. 查這個使用者名下的粉專，拿粉專自己的權杖（用來發文）
+  const pagesRes = await fetch(`https://graph.facebook.com/v21.0/me/accounts?access_token=${longData.access_token}`);
+  const pagesData = await pagesRes.json();
+  const page = pagesData.data?.[0];
+  if (!page) {
+    return res.status(400).send('<pre>找不到粉專：\n' + JSON.stringify(pagesData, null, 2) + '</pre>');
+  }
+
+  await setSetting('fb_page_id', page.id);
+  await setSetting('fb_page_token', page.access_token);
+  await setSetting('fb_page_name', page.name);
+
+  res.send(`
+    <h2>Facebook 授權成功 ✅</h2>
+    <p>粉專：${page.name}</p>
+    <p>粉專權杖一般不會過期，這頁可以關掉了。</p>
+  `);
+}));
+
 // ---------- 排程發文：定期檢查到期的貼文並自動發布到Instagram/YouTube ----------
 async function publishToInstagram(post) {
   const token = await getSetting('ig_access_token');
@@ -263,6 +314,28 @@ async function publishToYoutube(post) {
   return { mediaId: res.data.id, permalink: `https://youtube.com/shorts/${res.data.id}` };
 }
 
+async function publishToFacebook(post) {
+  const pageId = await getSetting('fb_page_id');
+  const pageToken = await getSetting('fb_page_token');
+  if (!pageId || !pageToken) throw new Error('Facebook粉專尚未授權');
+
+  const videoUrl = `https://noodle-shop-ordering.onrender.com/ig-videos/${encodeURIComponent(post.video_path)}`;
+
+  const res = await fetch(`https://graph.facebook.com/v21.0/${pageId}/videos`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: Buffer.from(JSON.stringify({
+      file_url: videoUrl,
+      description: post.caption,
+      access_token: pageToken,
+    }), 'utf8'),
+  });
+  const data = await res.json();
+  if (!data.id) throw new Error('發布失敗：' + JSON.stringify(data));
+
+  return { mediaId: data.id, permalink: `https://www.facebook.com/${pageId}/videos/${data.id}` };
+}
+
 async function refreshYoutubeTokenIfNeeded() {
   if (!YT_CLIENT_SECRET) return;
   const refreshToken = await getSetting('yt_refresh_token');
@@ -288,7 +361,7 @@ async function publishDuePosts() {
   );
   for (const post of rows) {
     try {
-      const publisher = post.platform === 'youtube' ? publishToYoutube : publishToInstagram;
+      const publisher = { youtube: publishToYoutube, facebook: publishToFacebook }[post.platform] || publishToInstagram;
       const result = await publisher(post);
       await client.execute({
         sql: "UPDATE scheduled_posts SET status = 'posted', posted_media_id = ?, posted_permalink = ? WHERE id = ?",
@@ -326,6 +399,12 @@ app.get('/api/staff/youtube-status', requireStaff, h(async (req, res) => {
   const refreshToken = await getSetting('yt_refresh_token');
   const channelTitle = await getSetting('yt_channel_title');
   res.json({ connected: !!refreshToken, channel_title: channelTitle });
+}));
+
+app.get('/api/staff/facebook-status', requireStaff, h(async (req, res) => {
+  const pageId = await getSetting('fb_page_id');
+  const pageName = await getSetting('fb_page_name');
+  res.json({ connected: !!pageId, page_name: pageName });
 }));
 
 // ---------- 商品：客人可看「上架中」商品 ----------
