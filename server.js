@@ -209,7 +209,7 @@ app.get('/facebook-callback', h(async (req, res) => {
 
   // 1. 授權碼換短效期使用者權杖
   const shortRes = await fetch(
-    `https://graph.facebook.com/v21.0/oauth/access_token?client_id=${FB_APP_ID}&client_secret=${FB_APP_SECRET}&redirect_uri=${encodeURIComponent(FB_REDIRECT_URI)}&code=${code}`
+    `https://graph.facebook.com/v23.0/oauth/access_token?client_id=${FB_APP_ID}&client_secret=${FB_APP_SECRET}&redirect_uri=${encodeURIComponent(FB_REDIRECT_URI)}&code=${code}`
   );
   const shortData = await shortRes.json();
   if (!shortData.access_token) {
@@ -218,7 +218,7 @@ app.get('/facebook-callback', h(async (req, res) => {
 
   // 2. 換成長效期使用者權杖（約60天，但用來換粉專權杖後，粉專權杖本身不太會過期）
   const longRes = await fetch(
-    `https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${FB_APP_ID}&client_secret=${FB_APP_SECRET}&fb_exchange_token=${shortData.access_token}`
+    `https://graph.facebook.com/v23.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${FB_APP_ID}&client_secret=${FB_APP_SECRET}&fb_exchange_token=${shortData.access_token}`
   );
   const longData = await longRes.json();
   if (!longData.access_token) {
@@ -226,7 +226,7 @@ app.get('/facebook-callback', h(async (req, res) => {
   }
 
   // 3. 查這個使用者名下的粉專，拿粉專自己的權杖（用來發文）
-  const pagesRes = await fetch(`https://graph.facebook.com/v21.0/me/accounts?access_token=${longData.access_token}`);
+  const pagesRes = await fetch(`https://graph.facebook.com/v23.0/me/accounts?access_token=${longData.access_token}`);
   const pagesData = await pagesRes.json();
   const page = pagesData.data?.[0];
   if (!page) {
@@ -321,7 +321,7 @@ async function publishToFacebook(post) {
 
   const videoUrl = `https://noodle-shop-ordering.onrender.com/ig-videos/${encodeURIComponent(post.video_path)}`;
 
-  const res = await fetch(`https://graph.facebook.com/v21.0/${pageId}/videos`, {
+  const res = await fetch(`https://graph.facebook.com/v23.0/${pageId}/videos`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
     body: Buffer.from(JSON.stringify({
