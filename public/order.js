@@ -1,8 +1,13 @@
 const params = new URLSearchParams(location.search);
-const tableNo = params.get('table'); // 有 table 參數 = 內用掃碼點餐；沒有 = 線上預購取貨
-const mode = tableNo ? 'dine_in' : 'pickup';
+const tableNo = params.get('table'); // 有 table 參數 = 內用掃碼點餐，直接鎖定，不用再選
+let mode = tableNo ? 'dine_in' : null; // null = 還沒選（內用/外帶/預購三選一）
+let manualTableNo = '';
 
-document.getElementById('modeBadge').textContent = tableNo ? `內用點餐・${tableNo}桌` : '線上預購取貨';
+const CATEGORY_ICON = { 麵食: '🍲', 湯品: '🥣', 滷味: '🍖' };
+const CATEGORY_ORDER = ['麵食', '滷味', '湯品'];
+
+updateModeBadge();
+if (!tableNo) renderTypeSelector();
 
 // LINE內建瀏覽器常有相容性問題，偵測到就提示客人改用手機預設瀏覽器開啟
 if (/\bLine\//i.test(navigator.userAgent)) {
@@ -18,8 +23,33 @@ if (/\bLine\//i.test(navigator.userAgent)) {
   };
 }
 
-const CATEGORY_ICON = { 麵食: '🍲', 湯品: '🥣', 滷味: '🍖' };
-const CATEGORY_ORDER = ['麵食', '滷味', '湯品']; // 顯示順序：先麵，再滷味，再湯
+function updateModeBadge() {
+  const label = { dine_in: `內用點餐${tableNo ? '・' + tableNo + '桌' : ''}`, takeout: '外帶', pickup: '線上預購取貨' };
+  document.getElementById('modeBadge').textContent = mode ? label[mode] : '請選擇取餐方式';
+}
+
+// ---------- 取餐方式三選一（沒掃桌號QR才會顯示） ----------
+function renderTypeSelector() {
+  const el = document.getElementById('typeSelector');
+  el.innerHTML = `
+    <div class="type-selector">
+      <button data-type="dine_in" class="${mode === 'dine_in' ? 'active' : ''}">🍽️ 內用</button>
+      <button data-type="takeout" class="${mode === 'takeout' ? 'active' : ''}">🥡 外帶</button>
+      <button data-type="pickup" class="${mode === 'pickup' ? 'active' : ''}">📅 預購取貨</button>
+    </div>
+    ${mode === 'dine_in' ? `<div class="inline-field"><input id="manualTableInput" placeholder="請輸入桌號，例如 A3" value="${manualTableNo}"></div>` : ''}
+  `;
+  el.querySelectorAll('button').forEach((btn) => {
+    btn.onclick = () => {
+      mode = btn.dataset.type;
+      updateModeBadge();
+      renderTypeSelector();
+      if (mode === 'dine_in') setTimeout(() => document.getElementById('manualTableInput')?.focus(), 50);
+    };
+  });
+  const input = document.getElementById('manualTableInput');
+  if (input) input.oninput = (e) => { manualTableNo = e.target.value; };
+}
 
 let products = [];
 const cart = new Map(); // product_id -> { product, qty }
@@ -36,7 +66,6 @@ function groupByCategory() {
   for (const p of products) {
     (byCategory[p.category] = byCategory[p.category] || []).push(p);
   }
-  // 依照 CATEGORY_ORDER 排序，沒列進去的分類排在最後面
   const sorted = {};
   const keys = Object.keys(byCategory).sort((a, b) => {
     const ia = CATEGORY_ORDER.indexOf(a), ib = CATEGORY_ORDER.indexOf(b);
@@ -55,13 +84,10 @@ function renderCategoryNav() {
   nav.querySelectorAll('button').forEach((btn) => {
     btn.onclick = () => {
       const target = document.getElementById(`section-${btn.dataset.cat}`);
-      const top = target.getBoundingClientRect().top + window.scrollY - 54; // 54px留給sticky分類導覽的高度
+      const top = target.getBoundingClientRect().top + window.scrollY - 54;
       window.scrollTo({ top, behavior: 'smooth' });
-      // 保險：如果瀏覽器不支援/不執行smooth捲動，300ms後檢查有沒有真的移動，沒有就直接跳轉
       const startY = window.scrollY;
-      setTimeout(() => {
-        if (Math.abs(window.scrollY - startY) < 10) window.scrollTo({ top });
-      }, 300);
+      setTimeout(() => { if (Math.abs(window.scrollY - startY) < 10) window.scrollTo({ top }); }, 300);
     };
   });
 }
@@ -111,6 +137,7 @@ function changeQty(p, delta) {
   else cart.set(p.id, { product: p, qty: next });
   renderMenu();
   renderCartBar();
+  renderMiniCart();
 }
 
 function setupScrollSpy() {
@@ -128,6 +155,8 @@ function setupScrollSpy() {
   window.addEventListener('scroll', onScroll, { passive: true });
 }
 
+// ---------- 快速購物車預覽（不用捲回頂部就能看/改已加的品項） ----------
+let miniCartOpen = false;
 function renderCartBar() {
   let count = 0, total = 0;
   for (const { product, qty } of cart.values()) {
@@ -139,34 +168,86 @@ function renderCartBar() {
   document.getElementById('submitBtn').disabled = count === 0;
 }
 
-document.getElementById('submitBtn').onclick = () => {
-  if (mode === 'pickup') showPickupForm();
-  else submitOrder({ type: 'dine_in', table_no: tableNo });
+document.getElementById('cartSummary').onclick = () => {
+  if (cart.size === 0) return;
+  miniCartOpen = !miniCartOpen;
+  renderMiniCart();
 };
 
-function showPickupForm() {
+function renderMiniCart() {
+  const el = document.getElementById('miniCart');
+  if (!miniCartOpen || cart.size === 0) { el.classList.remove('open'); el.innerHTML = ''; return; }
+  el.classList.add('open');
+  el.innerHTML = [...cart.values()].map(({ product, qty }) => `
+    <div class="mini-cart-row">
+      <span>${product.name}</span>
+      <div class="qty-control">
+        <button class="dec" data-id="${product.id}">－</button>
+        <span>${qty}</span>
+        <button class="inc" data-id="${product.id}">＋</button>
+      </div>
+    </div>
+  `).join('');
+  el.querySelectorAll('.inc').forEach((b) => b.onclick = () => changeQty(products.find(p => p.id === Number(b.dataset.id)), 1));
+  el.querySelectorAll('.dec').forEach((b) => b.onclick = () => changeQty(products.find(p => p.id === Number(b.dataset.id)), -1));
+}
+
+// ---------- 送出訂單 ----------
+document.getElementById('submitBtn').onclick = () => {
+  if (!mode) {
+    document.querySelector('.type-selector')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    flashTypeSelector();
+    return;
+  }
+  if (mode === 'dine_in' && tableNo) {
+    submitOrder({ type: 'dine_in', table_no: tableNo });
+    return;
+  }
+  if (mode === 'dine_in' && !tableNo) {
+    if (!manualTableNo.trim()) {
+      document.getElementById('manualTableInput')?.focus();
+      flashTypeSelector();
+      return;
+    }
+    submitOrder({ type: 'dine_in', table_no: manualTableNo.trim() });
+    return;
+  }
+  if (mode === 'takeout') { showContactForm('takeout'); return; }
+  if (mode === 'pickup') { showContactForm('pickup'); return; }
+};
+
+function flashTypeSelector() {
+  const box = document.querySelector('.type-selector');
+  if (!box) return;
+  box.style.boxShadow = '0 0 0 3px #c0392b';
+  setTimeout(() => { box.style.boxShadow = ''; }, 900);
+}
+
+function showContactForm(type) {
+  document.getElementById('miniCart').classList.remove('open');
+  miniCartOpen = false;
   const main = document.querySelector('main');
   const wrap = document.createElement('div');
   wrap.innerHTML = `
-    <form class="info-form" id="pickupForm">
-      <h3>留一下取貨資訊</h3>
-      <label>姓名<input required name="pickup_name"></label>
-      <label>電話<input required name="pickup_phone" type="tel"></label>
-      <label>希望取貨時間<input name="pickup_time" placeholder="例如 8/20 18:00"></label>
-      <label>備註（口味需求等）<input name="note"></label>
+    <form class="info-form" id="contactForm">
+      <h3>${type === 'takeout' ? '外帶資訊' : '預購取貨資訊'}</h3>
+      <label>姓名<input required name="pickup_name" autofocus></label>
+      <label>電話<input required name="pickup_phone" type="tel" inputmode="numeric"></label>
+      ${type === 'pickup' ? '<label>希望取貨時間<input name="pickup_time" placeholder="例如 8/25 18:00"></label>' : ''}
+      <label>備註（口味需求等，選填）<input name="note"></label>
       <button type="submit">確認送出訂單</button>
     </form>
   `;
   main.appendChild(wrap);
   wrap.scrollIntoView({ behavior: 'smooth' });
-  document.getElementById('pickupForm').onsubmit = (e) => {
+  document.getElementById('contactForm').onsubmit = (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
     submitOrder({
-      type: 'pickup',
+      type,
       pickup_name: fd.get('pickup_name'),
       pickup_phone: fd.get('pickup_phone'),
-      pickup_time: fd.get('pickup_time'),
+      pickup_time: fd.get('pickup_time') || '',
       note: fd.get('note'),
     });
   };
@@ -184,13 +265,24 @@ async function submitOrder(extra) {
     alert(data.error || '送出失敗，請再試一次');
     return;
   }
+
+  // 記到本機，方便之後回來查詢自己點過什麼
+  try {
+    const mine = JSON.parse(localStorage.getItem('myOrders') || '[]');
+    mine.push({ id: data.order_id, order_no: data.order_no, total: data.total, time: Date.now() });
+    localStorage.setItem('myOrders', JSON.stringify(mine.slice(-10)));
+  } catch {}
+
   document.querySelector('.category-nav').style.display = 'none';
+  document.getElementById('typeSelector').style.display = 'none';
+  document.getElementById('miniCart').style.display = 'none';
   document.querySelector('main').innerHTML = `
     <div class="confirm-box">
       <div class="check">✅</div>
       <h2>訂單已送出</h2>
       <div class="order-no">${data.order_no}</div>
-      <div class="amount">金額 ${data.total} 元，請於${mode === 'dine_in' ? '現場' : '取貨時'}付款</div>
+      <div class="amount">金額 ${data.total} 元，請於${extra.type === 'dine_in' ? '現場' : '取貨時'}付款</div>
+      <a href="order-status.html?id=${data.order_id}" style="display:inline-block;margin-top:16px;color:#7a2e1d;font-weight:700;text-decoration:none;border:1px solid #7a2e1d;border-radius:999px;padding:9px 22px;">查看訂單狀態 →</a>
     </div>
   `;
   document.querySelector('.cart-bar').style.display = 'none';

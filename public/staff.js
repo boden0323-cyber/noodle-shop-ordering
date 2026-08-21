@@ -91,7 +91,8 @@ async function loadOrders() {
 }
 
 function renderOrderCard(o) {
-  const src = o.type === 'dine_in' ? `內用 ${o.table_no}桌` : `預購取貨・${o.pickup_name}`;
+  const typeLabel = { dine_in: `內用 ${o.table_no}桌`, takeout: `外帶・${o.pickup_name}`, pickup: `預購取貨・${o.pickup_name}` };
+  const src = typeLabel[o.type] || o.type;
   const itemsHtml = o.items.map((it) => `${it.product_name} x${it.qty}${it.note ? `（${it.note}）` : ''}`).join('、');
   const payTag = o.paid ? `<span class="paid-tag">已收款(${o.payment_method === 'cash' ? '現金' : '刷卡'})</span>` : `<span class="unpaid-tag">未收款</span>`;
   return `

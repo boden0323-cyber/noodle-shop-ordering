@@ -263,7 +263,7 @@ app.delete('/api/staff/products/:id', requireStaff, h(async (req, res) => {
 app.post('/api/orders', h(async (req, res) => {
   const { type, table_no, pickup_name, pickup_phone, pickup_time, note, items } = req.body || {};
 
-  if (!['dine_in', 'pickup'].includes(type)) {
+  if (!['dine_in', 'takeout', 'pickup'].includes(type)) {
     return res.status(400).json({ error: '訂單類型不正確' });
   }
   if (!Array.isArray(items) || items.length === 0) {
@@ -272,8 +272,8 @@ app.post('/api/orders', h(async (req, res) => {
   if (type === 'dine_in' && !table_no) {
     return res.status(400).json({ error: '內用請提供桌號' });
   }
-  if (type === 'pickup' && !pickup_name) {
-    return res.status(400).json({ error: '預購請留姓名' });
+  if ((type === 'pickup' || type === 'takeout') && !pickup_name) {
+    return res.status(400).json({ error: '請留姓名' });
   }
 
   const productIds = items.map((i) => i.product_id);
@@ -317,6 +317,27 @@ app.post('/api/orders', h(async (req, res) => {
   }
 
   res.json({ ok: true, order_id: orderId, order_no: '#' + String(orderId).padStart(4, '0'), total });
+}));
+
+// ---------- 訂單：客人事後查詢自己的訂單（公開，不需登入，但不回傳姓名/電話等個資） ----------
+app.get('/api/orders/:id', h(async (req, res) => {
+  const { rows } = await client.execute({ sql: 'SELECT * FROM orders WHERE id = ?', args: [req.params.id] });
+  const order = rows[0];
+  if (!order) return res.status(404).json({ error: '找不到這筆訂單' });
+
+  const { rows: items } = await client.execute({ sql: 'SELECT product_name, price, qty, note FROM order_items WHERE order_id = ?', args: [order.id] });
+
+  res.json({
+    order_no: '#' + String(order.id).padStart(4, '0'),
+    type: order.type,
+    table_no: order.table_no,
+    status: order.status,
+    total: order.total,
+    paid: !!order.paid,
+    pickup_time: order.pickup_time,
+    created_at: order.created_at,
+    items,
+  });
 }));
 
 // ---------- 訂單：員工查看／管理 ----------

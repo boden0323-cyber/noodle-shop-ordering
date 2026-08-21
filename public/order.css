@@ -37,6 +37,35 @@ html, body {
   font-size: 12.5px;
 }
 
+/* ---------- 取餐方式三選一 ---------- */
+.type-selector {
+  display: flex; gap: 8px; padding: 12px 14px 0;
+  transition: box-shadow 0.2s; border-radius: 14px;
+}
+.type-selector button {
+  flex: 1; padding: 12px 6px; border: 2px solid #e8ddc9; background: #fff;
+  border-radius: 12px; font-size: 14px; font-weight: 700; color: #7a2e1d; cursor: pointer;
+}
+.type-selector button.active { border-color: #7a2e1d; background: #7a2e1d; color: #fff; }
+.inline-field { padding: 10px 14px 0; }
+.inline-field input {
+  width: 100%; padding: 11px 14px; border: 2px solid #d8a04c; border-radius: 12px;
+  font-size: 15px; background: #fffdf8;
+}
+
+/* ---------- 快速購物車預覽 ---------- */
+.mini-cart {
+  position: fixed; left: 0; right: 0; bottom: 66px; max-width: 720px; margin: 0 auto;
+  background: #fff; border-top: 1px solid #e8ddc9; max-height: 0; overflow-y: auto;
+  transition: max-height 0.25s ease; box-shadow: 0 -2px 10px rgba(0,0,0,0.06); z-index: 9;
+}
+.mini-cart.open { max-height: 40vh; }
+.mini-cart-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 16px; border-bottom: 1px solid #f3ead9; font-size: 14px;
+}
+.cart-bar .summary { cursor: pointer; }
+
 /* ---------- 分類快速導覽 ---------- */
 .category-nav {
   position: sticky;
