@@ -1,6 +1,20 @@
 const STATUS_LABEL = { received: '待處理', preparing: '製作中', done: '已完成', cancelled: '已取消' };
 let pollTimer = null;
 
+// LINE內建瀏覽器常有相容性問題，偵測到就提示改用手機預設瀏覽器開啟
+if (/\bLine\//i.test(navigator.userAgent)) {
+  const banner = document.createElement('div');
+  banner.style.cssText = 'background:#fff3cd;color:#7a5b00;padding:10px 14px;font-size:13px;text-align:center;line-height:1.5;';
+  banner.innerHTML = `
+    為了畫面能正常顯示，建議點右上角「⋯」選單，選「在瀏覽器中開啟」
+    <button id="copyLinkBtn" style="margin-left:6px;padding:3px 10px;border:none;border-radius:6px;background:#7a2e1d;color:#fff;font-size:12px;">複製連結</button>
+  `;
+  document.body.prepend(banner);
+  document.getElementById('copyLinkBtn').onclick = () => {
+    navigator.clipboard?.writeText(location.href).then(() => alert('連結已複製，貼到瀏覽器網址列開啟即可'));
+  };
+}
+
 async function checkLogin() {
   const res = await fetch('/api/staff/check');
   const { loggedIn } = await res.json();
